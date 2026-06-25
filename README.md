@@ -22,7 +22,9 @@ Random Forest cross-check.
 ├── 01_clean_data.py                   # Data cleaning (encoding fix, PII removal, type conversion)
 ├── 02_eda_analysis.py / .ipynb        # EDA + statistical root cause validation
 ├── 03_random_forest_validation.py / .ipynb   # Independent ML cross-validation
-└── charts/                            # All exported figures (PNG)
+├── supply_chain_dashboard.pbix        # Power BI dashboard (DAX measures, matrix, slicers)
+├── charts/                            # All exported figures from Python (PNG)
+└── screenshots/                       # Power BI dashboard screenshots
 ```
 
 Each analysis stage ships as a `.py` **and** a `.ipynb`. They're paired with
@@ -75,11 +77,38 @@ approach:
 Two independent methods, same conclusion — this is what makes the root cause
 diagnosis robust rather than a one-off pattern in a single statistic.
 
+## Power BI dashboard
+
+An interactive version of the same findings, built for stakeholders who'd
+rather click through filters than read a notebook.
+
+![Dashboard overview](screenshots/dashboard_overview.png)
+
+- **Calculated columns**: `New_Scheduled_Days` (a corrected SLA per shipping
+  mode) and `New_Late_Delivery_Risk` (recomputed late flag under that
+  correction) — these reproduce the Python policy simulation directly in DAX
+- **Measures**: `Total Orders`, `Late Delivery Rate`, `Avg Promised/Actual
+  Days`, `SLA Gap (Days)`, `Simulated Late Rate`, `Improvement (pp)`
+- **Region × Shipping Mode matrix**: the same confounder check from the EDA
+  stage, rebuilt as an interactive table — every region's `Late Delivery Rate`
+  is visible at once, confirming the pattern holds everywhere
+- **Before/after chart**: `Late Delivery Rate` vs `Simulated Late Rate` side
+  by side per shipping mode, the clearest single visual of the policy fix's
+  impact
+- **Slicers** on `Order_Region` and `Category_Name` let a viewer check whether
+  the conclusion holds for any specific slice of the business, without
+  touching the underlying model
+
+The DAX measures were built to match the Python numbers exactly (54.83%
+overall late rate, same per-mode breakdown) — having two independent
+implementations agree is itself a sanity check that neither has a bug.
+
 ## Tools
 
 Python (pandas, scikit-learn, matplotlib, seaborn) for cleaning, statistical
-validation, and machine learning cross-checks. Power BI dashboard (in progress)
-for an interactive, stakeholder-facing version of the same findings.
+validation, and machine learning cross-checks. Power BI (DAX measures,
+calculated columns, interactive matrix and slicers) for a stakeholder-facing
+version of the same findings.
 
 ## Limitations
 
