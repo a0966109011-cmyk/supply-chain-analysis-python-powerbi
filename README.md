@@ -1,19 +1,23 @@
 # Supply Chain Delivery SLA — Root Cause Analysis
 
 Diagnosing why 54.8% of orders in a supply chain dataset arrive late, ruling out
-confounding factors with statistical tests, cross-validating the root cause with
-an independent machine learning method, and quantifying the impact of a policy fix.
+confounding factors with statistical tests, cross-validating the finding with
+two independent methods, and quantifying the impact of a policy fix.
 
 ## Key finding
 
-> **Shipping mode's promised delivery time is the root cause of 54.8% of orders
-> arriving late — not region, product category, or order size.** Adjusting the
-> SLA promise to match real operational capability would cut the late rate to
-> **34.1%** (a 20.7 percentage point improvement).
+> **Shipping mode is the dominant factor behind 54.8% of orders arriving late
+> — not region, product category, or order size.** Controlling for region and
+> order size, choosing First Class shipping is associated with **33x higher
+> odds** of a late delivery than Standard Class (95% CI: 31.3–35.1, p<0.001).
+> Adjusting the SLA promise to match real operational capability would cut the
+> late rate to **34.1%** (a 20.7 percentage point improvement).
 
-This conclusion is independently confirmed by two different methods (see
-[Methodology](#methodology) below): manual statistical validation and a
-Random Forest cross-check.
+This is an association-based diagnosis confirmed by three independent
+methods (see [Methodology](#methodology)): manual statistical validation,
+a Random Forest cross-check, and a logistic regression with formal
+statistical inference. It is **not** a randomized-experiment causal proof —
+see [Limitations](#limitations).
 
 ## Project structure
 
@@ -22,6 +26,7 @@ Random Forest cross-check.
 ├── 01_clean_data.py                   # Data cleaning (encoding fix, PII removal, type conversion)
 ├── 02_eda_analysis.py / .ipynb        # EDA + statistical root cause validation
 ├── 03_random_forest_validation.py / .ipynb   # Independent ML cross-validation
+├── 04_statistical_inference.py / .ipynb      # Bootstrap CI + logistic regression (odds ratios)
 ├── supply_chain_dashboard.pbix        # Power BI dashboard (DAX measures, matrix, slicers)
 ├── charts/                            # All exported figures from Python (PNG)
 └── screenshots/                       # Power BI dashboard screenshots
@@ -77,6 +82,26 @@ approach:
 Two independent methods, same conclusion — this is what makes the root cause
 diagnosis robust rather than a one-off pattern in a single statistic.
 
+**4. Statistical inference: bootstrap CI + logistic regression**
+(`04_statistical_inference`)
+Two gaps from the stages above, closed with formal inference:
+- The Random Forest's AUC drop (0.729 → 0.708) was reported without checking
+  whether it could just be noise from a single train/test split. Bootstrapping
+  the test-set predictions 2,000 times gives a 95% CI of **[-0.0225, -0.0167]**
+  — it excludes zero, so the drop is statistically real, not sampling noise
+- A logistic regression (`Late_delivery_risk ~ Shipping_Mode + Region + Sales +
+  Quantity`) replaces "feature importance" with an interpretable effect size:
+  controlling for region and order size, **First Class has 33.2x the odds**
+  of a late delivery vs. Standard Class (95% CI: 31.3–35.1, p<0.001), Second
+  Class has 5.3x the odds (95% CI: 5.2–5.5, p<0.001)
+- `Market` was dropped from this model after discovering it's a strict nested
+  aggregation of `Order_Region` (every region maps to exactly one market) —
+  including both caused perfect collinearity and exploding standard errors,
+  a real bug caught while building this, not a hypothetical one
+- A likelihood ratio test confirms omitting `Category_Name` (50 levels) was
+  justified: adding it doesn't significantly improve the model (p=0.97), and
+  the Shipping_Mode odds ratios barely move (33.2 → 33.2)
+
 ## Power BI dashboard
 
 An interactive version of the same findings, built for stakeholders who'd
@@ -105,15 +130,29 @@ implementations agree is itself a sanity check that neither has a bug.
 
 ## Tools
 
-Python (pandas, scikit-learn, matplotlib, seaborn) for cleaning, statistical
-validation, and machine learning cross-checks. Power BI (DAX measures,
-calculated columns, interactive matrix and slicers) for a stakeholder-facing
-version of the same findings.
+Python (pandas, scikit-learn, statsmodels, matplotlib, seaborn) for cleaning,
+statistical validation, machine learning cross-checks, and formal statistical
+inference. Power BI (DAX measures, calculated columns, interactive matrix and
+slicers) for a stakeholder-facing version of the same findings.
 
 ## Limitations
 
-`First Class` shipping has zero variance in actual delivery days in this dataset
-(always exactly 2 days), which is unusual for real-world logistics data and may
-reflect some simplification in how the dataset was generated. Findings here
-should be re-validated against longer-horizon, more dispersed real operational
-data before being used for an actual policy decision.
+**Association, not causation.** Three methods (stratified EDA, Random Forest,
+logistic regression) agree that `Shipping_Mode` is strongly and robustly
+associated with late delivery, and the mechanism (SLA promises set below
+actual capability) makes the story plausible. But none of this is a
+randomized experiment, and selection into shipping mode isn't random — e.g.
+if which orders get assigned to a given shipping mode depends on factors not
+observed here (warehouse location, fulfillment-center load at order time),
+that could still confound the picture. A real causal test would require an
+A/B test of revised SLA promises, not just observational data. The honest
+claim this analysis supports is "the strongest, most consistent explanatory
+factor we can find" — strong enough to justify revisiting the SLA policy,
+not strong enough to call it proven causation.
+
+**Data quirks.** `First Class` shipping has zero variance in actual delivery
+days in this dataset (always exactly 2 days), which is unusual for
+real-world logistics data and may reflect some simplification in how the
+dataset was generated. Findings here should be re-validated against
+longer-horizon, more dispersed real operational data before being used for
+an actual policy decision.
